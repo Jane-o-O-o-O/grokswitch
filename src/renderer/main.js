@@ -67,12 +67,23 @@ function render() {
         </div>
       </header>
       <div class="status-bar">
-        <span class="label">当前默认模型：</span>
-        <span class="value ${currentConfig.default_model ? "active" : ""}" id="active-model">${
-          currentConfig.default_model || "未设置"
-        }</span>
-        <span style="flex:1"></span>
-        <span class="label">共 ${currentConfig.models.length} 个模型</span>
+        <div class="status-main">
+          <span class="label">当前默认模型</span>
+          <span class="value-chip ${currentConfig.default_model ? "active" : "empty"}" id="active-model">${
+            escapeHtml(activeDisplayName())
+          }</span>
+          ${
+            currentConfig.default_model
+              ? `<span class="value-sub" title="${escapeHtml(currentConfig.default_model)}">id: ${escapeHtml(
+                  currentConfig.default_model
+                )}</span>`
+              : ""
+          }
+        </div>
+        <div class="status-side">
+          <span class="label">共 ${currentConfig.models.length} 个模型</span>
+          <span class="hint">写入 ~/.grok/config.toml${currentConfig.has_backup ? " · 已有 .bak 备份" : ""}</span>
+        </div>
       </div>
       <div class="models-grid" id="models-grid">
         ${currentConfig.models.length ? renderCards() : renderEmpty()}
@@ -105,8 +116,11 @@ function renderCards() {
             <div class="meta-row"><span class="dot"></span>${escapeHtml(m.base_url)}</div>
             <div class="meta-row"><span class="dot"></span>${escapeHtml(m.api_backend)} · context ${m.context_window || "auto"}</div>
           </div>
+          ${isActive ? `<div class="active-badge">当前默认</div>` : ""}
           <div class="card-actions">
-            <button data-action="activate" data-id="${m.id}">${isActive ? "已启用" : "设为默认"}</button>
+            <button data-action="activate" data-id="${m.id}" class="${isActive ? "is-active-btn" : ""}">${
+              isActive ? "已启用" : "设为默认"
+            }</button>
             <button data-action="edit" data-id="${m.id}">编辑</button>
             <button data-action="delete" data-id="${m.id}">删除</button>
           </div>
@@ -163,11 +177,27 @@ async function loadConfig() {
   }
 }
 
+function activeDisplayName() {
+  if (!currentConfig.default_model) return "未设置";
+  const m = currentConfig.models.find((x) => x.id === currentConfig.default_model);
+  return m?.name || currentConfig.default_model;
+}
+
 async function activateModel(id) {
   try {
+    if (currentConfig.default_model === id) {
+      showToast("已经是当前默认模型", "success", 2500);
+      return;
+    }
     currentConfig = await window.electronAPI.activateModel(id);
     render();
-    showToast(`已切换到 ${id}`, "success");
+    const name =
+      currentConfig.models.find((m) => m.id === id)?.name || id;
+    showToast(
+      `已切换到「${name}」并写入配置。若 Grok 正在运行，请新开会话或重启后再用新模型。`,
+      "success",
+      4500
+    );
   } catch (err) {
     showToast(String(err), "error");
   }
@@ -314,7 +344,9 @@ async function saveModel() {
   }
 }
 
-function showToast(message, type) {
+let toastTimer = null;
+
+function showToast(message, type, durationMs = 3000) {
   const toast = $("#toast");
   if (!toast) {
     console.error(`[toast:${type}]`, message);
@@ -322,7 +354,8 @@ function showToast(message, type) {
   }
   toast.textContent = message;
   toast.className = `toast ${type} show`;
-  setTimeout(() => toast.classList.remove("show"), 3000);
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), durationMs);
 }
 
 function escapeHtml(text) {

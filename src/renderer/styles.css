@@ -119,27 +119,101 @@ header {
 .status-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.06));
+  border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: var(--radius);
   margin-bottom: 20px;
   font-size: 14px;
   flex-shrink: 0;
 }
 
-.status-bar .label {
-  color: var(--text-secondary);
+.status-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
 }
 
-.status-bar .value {
-  font-weight: 600;
+.status-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.status-bar .label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.status-bar .value-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 320px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   color: var(--text);
 }
 
-.status-bar .value.active {
-  color: var(--success);
+.status-bar .value-chip.active {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12);
+}
+
+.status-bar .value-chip.empty {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.status-bar .value-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: "SF Mono", Consolas, monospace;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-bar .hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.9;
+}
+
+.active-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  width: fit-content;
+}
+
+.card-actions button.is-active-btn {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .models-grid {
@@ -452,6 +526,9 @@ header {
   border: 1px solid var(--border);
   color: var(--text);
   font-size: 14px;
+  max-width: min(520px, 92vw);
+  text-align: center;
+  line-height: 1.45;
   opacity: 0;
   pointer-events: none;
   transition: all 0.3s ease;
