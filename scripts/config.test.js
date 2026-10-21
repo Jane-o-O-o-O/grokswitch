@@ -56,3 +56,67 @@ test('model activation and repeated saves preserve zero sampling parameters', (t
   assert.equal(fixture.read().model.zero.top_p, 0);
   assert.equal(fixture.read().model.other.temperature, 0.7);
 });
+
+test('quoted model IDs and unknown keys survive activation, editing, and deletion', (t) => {
+  for (const id of ['provider.model', 'closing]bracket', 'quote"slash\\id', ' spaced key ', 'line\nbreak']) {
+    const fixture = configFixture(t, `[models]\ndefault = ${JSON.stringify(id)}\n
+[model.${JSON.stringify(id)}] # keep model settings\nmodel = "remote"\n"extra.with]bracket" = "retained"\n
+[features]\nflag = true\n`);
+    fixture.invoke('activate-model', id);
+    assert.equal(fixture.loadConfig().models[0].id, id);
+    assert.equal(fixture.read().model[id]['extra.with]bracket'], 'retained');
+    fixture.invoke('add-or-update-model', { id, model: 'updated' });
+    assert.equal(fixture.read().model[id].model, 'updated');
+    assert.equal(fixture.read().features.flag, true);
+    fixture.invoke('delete-model', id);
+    assert.equal(fixture.loadConfig().models.length, 0);
+    assert.equal(fixture.read().features.flag, true);
+  }
+});
+
+test('section splitting preserves multiline text and unrelated arrays of tables', (t) => {
+  const initial = `# preamble comment\n[models]\ndefault = "main"\n
+[model.main]\nmodel = "remote"\n
+[features] # preserved settings\nnote = """\n[model."not a table"]\nkeep this text\n"""\nvalues = [\n["models"]\n]\n
+[[plugins]] # first plugin\nname = "one"\n
+[[plugins]]\nname = "two"\n`;
+  const fixture = configFixture(t, initial);
+  const expected = toml.parse(initial);
+  fixture.saveConfig(fixture.loadConfig());
+  fixture.saveConfig(fixture.loadConfig());
+  assert.deepEqual(fixture.read().features, expected.features);
+  assert.deepEqual(fixture.read().plugins, expected.plugins);
+  assert.deepEqual(Object.keys(fixture.read().model), ['main']);
+  assert.ok(fs.readFileSync(fixture.configPath, 'utf8').includes('# first plugin'));
+});
+
+test('invalid generated or existing TOML never overwrites the current configuration', (t) => {
+  const initial = '[model.main]\nmodel = "remote"\n';
+  const fixture = configFixture(t, initial);
+  const invalid = fixture.loadConfig();
+  invalid.models.push({ id: 'main', model: 'duplicate' });
+  assert.throws(() => fixture.saveConfig(invalid));
+  assert.equal(fs.readFileSync(fixture.configPath, 'utf8'), initial);
+  assert.equal(fs.existsSync(`${fixture.configPath}.bak`), false);
+  fs.writeFileSync(fixture.configPath, '[broken');
+  assert.throws(() => fixture.saveConfig({ models: [] }));
+  assert.equal(fs.readFileSync(fixture.configPath, 'utf8'), '[broken');
+});
+
+test('renderer preserves quoted IDs and API keys in HTML attributes', () => {
+  const id = '"<id]';
+  const modal = { innerHTML: '', querySelectorAll: () => [] };
+  const overlay = { classList: { add() {} } };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => ({ '#modal': modal, '#modal-overlay': overlay })[selector] },
+    fixtureConfig: { models: [{ id, model: 'remote', base_url: '', api_key: 'key"value' }] },
+  });
+  const renderer = fs.readFileSync(path.resolve(__dirname, '../src/renderer/main.js'), 'utf8');
+  vm.runInContext(renderer.replace(/\nloadConfig\(\);\s*$/, ''), context);
+  const cards = vm.runInContext('currentConfig = fixtureConfig; renderCards()', context);
+  assert.match(cards, /data-id="&quot;&lt;id\]"/);
+  context.editId = id;
+  vm.runInContext('openModal(editId)', context);
+  assert.match(modal.innerHTML, /id="input-id" value="&quot;&lt;id\]"/);
+  assert.match(modal.innerHTML, /value="key&quot;value"/);
+});

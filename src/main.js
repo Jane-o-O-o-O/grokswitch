@@ -44,6 +44,53 @@ function backupConfig() {
   return true;
 }
 
+function tableHeader(line) {
+  if (!line.trimStart().startsWith('[')) return null;
+  try {
+    let table = toml.parse(`${line}\n`);
+    const keys = [];
+    while (table && typeof table === 'object' && !Array.isArray(table)) {
+      const names = Object.keys(table);
+      if (names.length !== 1) break;
+      keys.push(names[0]);
+      table = table[names[0]];
+    }
+    if (!keys.length) return null;
+    return {
+      name: keys.join('.'),
+      managed: (keys[0] === 'models' && keys.length === 1) ||
+        (keys[0] === 'model' && keys.length > 1) ||
+        (keys.length === 1 && keys[0].startsWith('model.')),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function nextTomlState(line, state) {
+  let { quote, arrayDepth } = state;
+  for (let i = 0; i < line.length; i++) {
+    if (quote) {
+      if (quote.startsWith('"') && line[i] === '\\') { i++; continue; }
+      if (line.startsWith(quote, i)) {
+        let length = quote.length;
+        if (length === 3) while (line[i + length] === quote[0]) length++;
+        i += length - 1;
+        quote = null;
+      }
+    } else {
+      if (line[i] === '#') break;
+      if (line[i] === '"' || line[i] === "'") {
+        quote = line.startsWith(line[i].repeat(3), i) ? line[i].repeat(3) : line[i];
+        i += quote.length - 1;
+      }
+      if (line[i] === '[') arrayDepth++;
+      if (line[i] === ']') arrayDepth = Math.max(0, arrayDepth - 1);
+    }
+  }
+  return { quote, arrayDepth };
+}
+
 /**
  * Split TOML into preamble (leading comments / blank lines) and named sections.
  * Non-model sections are kept as raw text so comments/formatting survive.
@@ -54,22 +101,23 @@ function splitTomlSections(raw) {
   let preambleLines = [];
   let current = null;
 
-  const headerRe = /^\s*\[([^\]]+)\]\s*(?:#.*)?$/;
+  let state = { quote: null, arrayDepth: 0 };
 
   for (const line of lines) {
-    const match = line.match(headerRe);
-    if (match) {
+    const header = state.quote || state.arrayDepth ? null : tableHeader(line);
+    if (header) {
       if (current) {
         sections.push(current);
       } else if (preambleLines.length) {
         // trailing blanks before first table stay with preamble
       }
-      current = { name: match[1].trim(), lines: [line] };
+      current = { ...header, lines: [line] };
     } else if (current) {
       current.lines.push(line);
     } else {
       preambleLines.push(line);
     }
+    state = nextTomlState(line, state);
   }
   if (current) sections.push(current);
 
@@ -82,6 +130,7 @@ function splitTomlSections(raw) {
     preamble: preambleLines.join('\n'),
     sections: sections.map((s) => ({
       name: s.name,
+      managed: s.managed,
       raw: trimSectionRaw(s.lines.join('\n')),
     })),
   };
@@ -112,7 +161,12 @@ function formatTomlValue(value) {
 function formatKeyValue(key, value, indent = '') {
   const formatted = formatTomlValue(value);
   if (formatted === null) return '';
-  return `${indent}${key} = ${formatted}`;
+  return `${indent}${formatTomlKey(key)} = ${formatted}`;
+}
+
+function formatTomlKey(key) {
+  const value = String(key);
+  return /^[A-Za-z0-9_-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
 function buildModelsTable(defaultModel) {
@@ -124,7 +178,7 @@ function buildModelsTable(defaultModel) {
 }
 
 function buildModelTable(entry) {
-  const lines = [`[model.${entry.id}]`];
+  const lines = [`[model.${formatTomlKey(entry.id)}]`];
   const section = {};
 
   section.model = entry.model;
@@ -262,33 +316,24 @@ function saveConfig(config) {
 
   const existingRaw = readRawConfig();
   if (existingRaw !== null) {
-    backupConfig();
-    try {
-      const { preamble: p, sections } = splitTomlSections(existingRaw);
-      preamble = p;
-      for (const sec of sections) {
-        if (sec.name === 'models' || sec.name.startsWith('model.')) continue;
-        preservedSections.push(sec.raw);
-      }
-    } catch {
-      // If split fails, fall back to empty preserve list (backup already made)
+    const parsed = toml.parse(existingRaw);
+    const { preamble: p, sections } = splitTomlSections(existingRaw);
+    preamble = p;
+    for (const sec of sections) {
+      if (sec.managed) continue;
+      preservedSections.push(sec.raw);
     }
 
     // Merge extra fields from disk for models that still exist, if client omitted them
-    try {
-      const parsed = toml.parse(existingRaw);
-      for (const entry of config.models) {
-        const prev = getParsedModelTable(parsed, entry.id);
-        if (!prev || typeof prev !== 'object') continue;
-        if (entry.extra) continue;
-        const extra = {};
-        for (const [k, v] of Object.entries(prev)) {
-          if (!MODEL_KNOWN_KEYS.has(k)) extra[k] = v;
-        }
-        if (Object.keys(extra).length) entry.extra = extra;
+    for (const entry of config.models) {
+      const prev = getParsedModelTable(parsed, entry.id);
+      if (!prev || typeof prev !== 'object') continue;
+      if (entry.extra) continue;
+      const extra = {};
+      for (const [k, v] of Object.entries(prev)) {
+        if (!MODEL_KNOWN_KEYS.has(k)) extra[k] = v;
       }
-    } catch {
-      // ignore
+      if (Object.keys(extra).length) entry.extra = extra;
     }
   }
 
@@ -305,6 +350,8 @@ function saveConfig(config) {
   }
 
   const content = `${blocks.join('\n\n')}\n`;
+  toml.parse(content);
+  backupConfig();
   fs.writeFileSync(CONFIG_PATH, content, 'utf-8');
 }
 

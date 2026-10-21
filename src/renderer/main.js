@@ -105,9 +105,9 @@ function renderCards() {
       const isActive = currentConfig.default_model === m.id;
       const style = preset ? `background: linear-gradient(135deg, ${preset.color}, ${adjustColor(preset.color, -30)});` : "";
       return `
-        <div class="model-card ${isActive ? "active" : ""}" data-id="${m.id}">
+        <div class="model-card ${isActive ? "active" : ""}" data-id="${escapeHtml(m.id)}">
           <div class="card-header">
-            <div class="provider-icon" style="${style}">${preset?.icon || m.id.slice(0, 2).toUpperCase()}</div>
+            <div class="provider-icon" style="${style}">${preset?.icon || escapeHtml(m.id.slice(0, 2).toUpperCase())}</div>
             <div class="check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
           </div>
           <h3 class="model-name">${escapeHtml(m.name || m.id)}</h3>
@@ -118,11 +118,11 @@ function renderCards() {
           </div>
           ${isActive ? `<div class="active-badge">当前默认</div>` : ""}
           <div class="card-actions">
-            <button data-action="activate" data-id="${m.id}" class="${isActive ? "is-active-btn" : ""}">${
+            <button data-action="activate" data-id="${escapeHtml(m.id)}" class="${isActive ? "is-active-btn" : ""}">${
               isActive ? "已启用" : "设为默认"
             }</button>
-            <button data-action="edit" data-id="${m.id}">编辑</button>
-            <button data-action="delete" data-id="${m.id}">删除</button>
+            <button data-action="edit" data-id="${escapeHtml(m.id)}">编辑</button>
+            <button data-action="delete" data-id="${escapeHtml(m.id)}">删除</button>
           </div>
         </div>
       `;
@@ -224,7 +224,7 @@ function openModal(editId) {
     ${!entry ? `<div class="presets">${PRESETS.map((p) => `<span class="preset-chip" data-preset="${p.id}">${p.name}</span>`).join("")}</div>` : ""}
     <div class="form-group">
       <label>模型 ID（唯一标识，如 deepseek-v3）</label>
-      <input id="input-id" value="${entry?.id || ""}" ${entry ? "disabled" : ""} placeholder="deepseek-v3">
+      <input id="input-id" value="${escapeHtml(entry?.id || "")}" ${entry ? "disabled" : ""} placeholder="deepseek-v3">
     </div>
     <div class="form-group">
       <label>显示名称</label>
@@ -254,7 +254,7 @@ function openModal(editId) {
     </div>
     <div class="form-group">
       <label>API Key（可选，留空可用环境变量）</label>
-      <input id="input-api-key" type="password" value="${entry?.api_key || ""}" placeholder="sk-...">
+      <input id="input-api-key" type="password" value="${escapeHtml(entry?.api_key || "")}" placeholder="sk-...">
     </div>
     <div class="form-group">
       <label>环境变量名（可选，如 DEEPSEEK_API_KEY）</label>
