@@ -12,7 +12,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "toml": "^3.0.0"
+    "@iarna/toml": "^2.2.5"
   },
   "devDependencies": {
     "electron": "^32.0.0",

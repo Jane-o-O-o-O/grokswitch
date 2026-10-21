@@ -5,7 +5,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const toml = require('toml');
+const toml = require('@iarna/toml');
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grokswitch-smoke-'));
 const configDir = path.join(root, '.grok');

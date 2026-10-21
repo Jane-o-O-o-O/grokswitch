@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const toml = require('toml');
+const toml = require('@iarna/toml');
 
 const mainPath = path.resolve(__dirname, '../src/main.js');
 const mainRequire = createRequire(mainPath);
@@ -119,4 +119,41 @@ test('renderer preserves quoted IDs and API keys in HTML attributes', () => {
   vm.runInContext('openModal(editId)', context);
   assert.match(modal.innerHTML, /id="input-id" value="&quot;&lt;id\]"/);
   assert.match(modal.innerHTML, /value="key&quot;value"/);
+});
+
+test('nested extra values and datetimes survive activation and repeated saves', (t) => {
+  const initial = `[models]\ndefault = "main"\n
+[model.main]\nmodel = "remote"\n
+headers = { "X.Custom]Header" = "value", nested = { enabled = true, retries = 0 } }\n
+profiles = [{ name = "first", nested = { numbers = [1, 2, 3] } }, { name = "second" }]\n
+matrix = [[1, 2], [3, 4]]\nempty = {}\nempty_list = []\n
+created_at = 1979-05-27T07:32:00Z\ndates = [1979-05-27T07:32:00Z, 1980-01-01T00:00:00Z]\n
+local_date = 1979-05-27\nlocal_time = 07:32:00.000\nlarge_integer = 9223372036854775807\n`;
+  const fixture = configFixture(t, initial);
+  const expected = toml.parse(initial).model.main;
+  fixture.invoke('activate-model', 'main');
+  fixture.saveConfig(fixture.loadConfig());
+  assert.deepEqual(fixture.read().model.main, expected);
+  assert.equal(fs.readFileSync(`${fixture.configPath}.bak`, 'utf8').includes('created_at = 1979-05-27T07:32:00.000Z'), true);
+
+  fixture.invoke('add-or-update-model', { id: 'main', model: 'edited' });
+  assert.deepEqual(fixture.read().model.main.headers, expected.headers);
+  assert.deepEqual(fixture.read().model.main.profiles, expected.profiles);
+  assert.ok(fixture.read().model.main.created_at instanceof Date);
+});
+
+test('invalid nested values leave both configuration and previous backup intact', (t) => {
+  const fixture = configFixture(t, '[model.main]\nmodel = "remote"\n');
+  fixture.saveConfig(fixture.loadConfig());
+  const original = fs.readFileSync(fixture.configPath, 'utf8');
+  const backup = fs.readFileSync(`${fixture.configPath}.bak`, 'utf8');
+  const cycle = {};
+  cycle.self = cycle;
+  for (const value of [[null], { invalid: null }, { invalid: undefined }, { invalid: new Date(NaN) }, { invalid: () => {} }, cycle]) {
+    const config = fixture.loadConfig();
+    config.models[0].extra = { custom: value };
+    assert.throws(() => fixture.saveConfig(config));
+    assert.equal(fs.readFileSync(fixture.configPath, 'utf8'), original);
+    assert.equal(fs.readFileSync(`${fixture.configPath}.bak`, 'utf8'), backup);
+  }
 });

@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const toml = require('toml');
+const toml = require('@iarna/toml');
 
 const CONFIG_DIR = path.join(os.homedir(), '.grok');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.toml');
@@ -140,22 +140,28 @@ function trimSectionRaw(text) {
   return text.replace(/\n+$/, '');
 }
 
+function validateTomlValue(value, ancestors = new Set()) {
+  if (value === undefined || value === null) throw new Error('TOML 不能包含空值');
+  if (['string', 'number', 'boolean', 'bigint'].includes(typeof value)) return;
+  if (typeof value !== 'object') throw new Error(`TOML 不支持 ${typeof value} 类型`);
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) throw new Error('TOML 日期无效');
+    return;
+  }
+  if (ancestors.has(value)) throw new Error('TOML 配置不能包含循环引用');
+  ancestors.add(value);
+  try {
+    const items = Array.isArray(value) ? Array.from(value) : Object.values(value);
+    for (const item of items) validateTomlValue(item, ancestors);
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
 function formatTomlValue(value) {
   if (value === undefined || value === null) return null;
-  if (typeof value === 'string') {
-    return JSON.stringify(value);
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((v) => JSON.stringify(v)).join(', ')}]`;
-  }
-  if (typeof value === 'object') {
-    // Nested tables are not expected here; stringify as inline table-ish JSON fallback
-    return JSON.stringify(value);
-  }
-  return JSON.stringify(String(value));
+  validateTomlValue(value);
+  return toml.stringify.value(value);
 }
 
 function formatKeyValue(key, value, indent = '') {
