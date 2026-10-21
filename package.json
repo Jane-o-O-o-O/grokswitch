@@ -5,6 +5,7 @@
   "description": "A beautiful GUI for switching Grok models",
   "main": "src/main.js",
   "scripts": {
+    "test": "node --test scripts/config.test.js",
     "start": "electron .",
     "build": "electron-builder",
     "dist": "electron-builder --win",

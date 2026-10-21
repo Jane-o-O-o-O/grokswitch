@@ -175,10 +175,10 @@ function modelEntryFromValue(id, value) {
     api_backend: value.api_backend || 'chat_completions',
     api_key: value.api_key || undefined,
     env_key: value.env_key || undefined,
-    context_window: value.context_window || undefined,
-    max_completion_tokens: value.max_completion_tokens || undefined,
-    temperature: value.temperature || undefined,
-    top_p: value.top_p || undefined,
+    context_window: value.context_window ?? undefined,
+    max_completion_tokens: value.max_completion_tokens ?? undefined,
+    temperature: value.temperature ?? undefined,
+    top_p: value.top_p ?? undefined,
     extra: Object.keys(extra).length ? extra : undefined,
   };
 }
